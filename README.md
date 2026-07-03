@@ -2,6 +2,8 @@
 
 AUTOSAR Classic Secure Boot — Software Simulation (Phase 1)
 
+ [▶ Live Demo](https://venaychawda.github.io/SecureBoot/)
+
 ## About
 
 SecureBootLab is a software-only simulation of an AUTOSAR Classic ECU secure boot

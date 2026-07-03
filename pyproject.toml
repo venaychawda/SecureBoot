@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "secureboot"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "SecureBootLab — AUTOSAR Classic Secure Boot Simulation"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "vtc: Verification Test Case ID",
+    "sim: Phase 1 simulation test (no hardware required)",
+    "slow: Test involves real timer delays",
+    "hw: Phase 2 hardware test (requires --hardware flag)",
+]

@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+*.egg
+.mypy_cache/
+
+# NvM simulation store
+sim/nvm_store.json
+sim/nvm_store.tmp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+.claude/
+CLAUDE.md
+documents/
+requirements/

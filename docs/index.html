@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureBootLab — PoC Dashboard</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-root:    #080d16;
+  --bg-panel:   #0c1220;
+  --bg-panel2:  #101828;
+  --bg-active:  #131e30;
+  --border:     #1c2d44;
+  --border-hi:  #2a4060;
+
+  --text:       #b8c8dc;
+  --text-dim:   #4a6080;
+  --text-hi:    #e0ecff;
+
+  --amber:      #f0a030;
+  --amber-dim:  #7a5018;
+  --amber-glow: rgba(240,160,48,0.18);
+  --green:      #28c060;
+  --green-dim:  #0e4020;
+  --green-glow: rgba(40,192,96,0.18);
+  --red:        #e04048;
+  --red-dim:    #5a1018;
+  --red-glow:   rgba(224,64,72,0.18);
+  --blue:       #4890e8;
+  --blue-dim:   #0e2a5a;
+  --blue-glow:  rgba(72,144,232,0.15);
+
+  --font-mono: 'Consolas', 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  --font-ui:   'Segoe UI', system-ui, -apple-system, sans-serif;
+  --radius:    6px;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-root);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* ── PoC Banner ── */
+.poc-banner {
+  background: linear-gradient(90deg, #3a1a00, #5a2a00, #3a1a00);
+  border-bottom: 2px solid var(--amber);
+  padding: 10px 20px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--amber);
+  letter-spacing: 0.04em;
+}
+.poc-banner strong { color: #ffd080; }
+.poc-banner a { color: var(--amber); text-decoration: underline; cursor: pointer; }
+
+/* ── App Header ── */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.app-header .logo {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--amber);
+  letter-spacing: 0.06em;
+}
+.app-header .subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.app-header .spacer { flex: 1; }
+.lifecycle-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.lifecycle-badge.DEVELOPMENT {
+  background: var(--blue-dim);
+  color: var(--blue);
+  border-color: var(--blue);
+}
+.lifecycle-badge.PRODUCTION {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: var(--red);
+}
+.lifecycle-badge.EOL {
+  background: var(--amber-dim);
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+/* ── Main Grid ── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  grid-template-rows: 1fr 1fr;
+  height: calc(100vh - 95px);
+  gap: 1px;
+  background: var(--border);
+}
+
+/* ── Panel Base ── */
+.panel {
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-panel2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.panel-header .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+}
+.panel-header .dot.green { background: var(--green); }
+.panel-header .dot.red { background: var(--red); }
+.panel-header .dot.blue { background: var(--blue); }
+.panel-body { flex: 1; overflow-y: auto; padding: 14px; }
+.panel-body::-webkit-scrollbar { width: 6px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+/* ── Panel 1: ECU State Monitor ── */
+#panel-ecu .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 10px 14px;
+}
+
+.state-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.phase-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.phase-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-left: 14px;
+}
+.phase-connector .line {
+  width: 2px;
+  height: 14px;
+  background: var(--border-hi);
+  transition: background 0.4s;
+}
+.phase-connector .line.active { background: var(--amber); }
+
+.phase-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-panel2);
+  cursor: default;
+  transition: all 0.35s ease;
+  flex-shrink: 0;
+}
+.phase-node .phase-icon {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.phase-node .phase-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  transition: color 0.35s;
+}
+.phase-node .phase-desc {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-left: auto;
+  text-align: right;
+  transition: color 0.35s;
+}
+
+/* Active state */
+.phase-node.active {
+  border-color: var(--amber);
+  background: var(--amber-glow);
+  box-shadow: 0 0 12px var(--amber-glow);
+}
+.phase-node.active .phase-label { color: var(--amber); }
+.phase-node.active .phase-desc { color: var(--amber); opacity: 0.8; }
+
+.phase-node.success {
+  border-color: var(--green);
+  background: var(--green-glow);
+}
+.phase-node.success .phase-label { color: var(--green); }
+
+.phase-node.failure {
+  border-color: var(--red);
+  background: var(--red-glow);
+  box-shadow: 0 0 10px var(--red-glow);
+}
+.phase-node.failure .phase-label { color: var(--red); }
+
+/* Side paths container */
+.side-paths {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  margin-left: 14px;
+}
+.side-path-node {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-panel2);
+  transition: all 0.35s;
+}
+.side-path-node .phase-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  transition: color 0.35s;
+}
+.side-path-node .phase-icon { font-size: 13px; display: inline-block; margin-right: 6px; }
+.side-path-node.active { border-color: var(--red); background: var(--red-glow); }
+.side-path-node.active .phase-label { color: var(--red); }
+.side-path-node.locked { border-color: var(--amber); background: var(--amber-glow); }
+.side-path-node.locked .phase-label { color: var(--amber); }
+
+/* ECU properties strip */
+.ecu-props {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.ecu-prop {
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+}
+.ecu-prop .prop-key {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+.ecu-prop .prop-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-hi);
+  transition: color 0.3s;
+}
+.ecu-prop .prop-val.green { color: var(--green); }
+.ecu-prop .prop-val.red { color: var(--red); }
+.ecu-prop .prop-val.amber { color: var(--amber); }
+
+/* ── Panel 2: Operation Console ── */
+#panel-console .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.scenario-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scenario-selector label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+}
+.scenario-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.scenario-tab {
+  padding: 5px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-hi);
+  background: var(--bg-panel2);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.scenario-tab:hover { border-color: var(--amber); color: var(--amber); }
+.scenario-tab.active { border-color: var(--amber); background: var(--amber-glow); color: var(--amber); }
+
+.console-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-primary {
+  background: var(--amber-glow);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.btn-primary:hover:not(:disabled) { background: rgba(240,160,48,0.32); box-shadow: 0 0 10px var(--amber-glow); }
+.btn-secondary {
+  background: var(--bg-panel2);
+  border-color: var(--border-hi);
+  color: var(--text);
+}
+.btn-secondary:hover:not(:disabled) { border-color: var(--text); color: var(--text-hi); }
+.btn-green {
+  background: var(--green-glow);
+  border-color: var(--green);
+  color: var(--green);
+}
+.btn-green:hover:not(:disabled) { background: rgba(40,192,96,0.32); }
+.btn-red {
+  background: var(--red-glow);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.progress-bar-wrap {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--amber);
+  width: 0%;
+  transition: width 0.4s ease;
+}
+
+.step-display {
+  background: var(--bg-panel2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  min-height: 90px;
+}
+.step-display .step-num {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.step-display .step-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--amber);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.step-display .step-detail {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.result-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.result-badge.PASS { background: var(--green-glow); border-color: var(--green); color: var(--green); }
+.result-badge.FAIL { background: var(--red-glow); border-color: var(--red); color: var(--red); }
+.result-badge.RUNNING { background: var(--amber-glow); border-color: var(--amber); color: var(--amber); }
+
+/* Security properties row */
+.security-props {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sec-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  transition: all 0.3s;
+}
+.sec-chip .chip-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.sec-chip.on { border-color: var(--green); color: var(--green); }
+.sec-chip.on .chip-dot { background: var(--green); }
+.sec-chip.off { border-color: var(--red); color: var(--red); }
+.sec-chip.off .chip-dot { background: var(--red); }
+.sec-chip.warn { border-color: var(--amber); color: var(--amber); }
+.sec-chip.warn .chip-dot { background: var(--amber); }
+
+/* ── Panel 3: Test Scenario Runner ── */
+#panel-vtc .panel-body { padding: 8px; }
+
+.vtc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.vtc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: var(--bg-panel2);
+  transition: all 0.2s;
+}
+.vtc-row:hover { border-color: var(--border-hi); }
+.vtc-row.running { border-color: var(--amber); background: var(--amber-glow); }
+.vtc-row.pass { border-color: var(--green); background: var(--green-glow); }
+.vtc-row.fail { border-color: var(--red); background: var(--red-glow); }
+.vtc-row.skip { opacity: 0.55; }
+
+.vtc-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--amber);
+  width: 42px;
+  flex-shrink: 0;
+}
+.vtc-desc {
+  font-size: 11px;
+  color: var(--text);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vtc-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.vtc-status.pass { color: var(--green); }
+.vtc-status.fail { color: var(--red); }
+.vtc-status.skip { color: var(--text-dim); }
+.vtc-status.running { color: var(--amber); }
+.vtc-status.pending { color: var(--text-dim); }
+
+.vtc-run-btn {
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--border-hi);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.vtc-run-btn:hover { border-color: var(--amber); color: var(--amber); }
+.vtc-run-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.vtc-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 8px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Panel 4: Event Log ── */
+#panel-log .panel-body { padding: 0; }
+.event-log {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.log-entry {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  border-radius: 2px;
+  animation: logSlideIn 0.25s ease;
+}
+@keyframes logSlideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.log-ts   { color: var(--text-dim); flex-shrink: 0; width: 54px; }
+.log-sev  { flex-shrink: 0; width: 52px; font-weight: 700; }
+.log-sev.INFO     { color: var(--blue); }
+.log-sev.WARNING  { color: var(--amber); }
+.log-sev.CRITICAL { color: var(--red); }
+.log-sev.TAMPER   { color: var(--red); }
+.log-msg  { color: var(--text); flex: 1; }
+.log-msg.INFO     { color: #8ab8e8; }
+.log-msg.WARNING  { color: #e8c880; }
+.log-msg.CRITICAL { color: #e07880; }
+.log-msg.TAMPER   { color: #ff6060; font-weight: 600; }
+.log-swr  { color: var(--text-dim); flex-shrink: 0; font-size: 9px; align-self: center; }
+
+.log-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+</style>
+</head>
+<body>
+
+<!-- PoC Banner -->
+<div class="poc-banner">
+  ⚠ &nbsp;<strong>Proof of Concept</strong> — all logic is simulated in JavaScript.
+  Open <strong>SecureBoot_Monitor.html</strong> with the FastAPI backend running for live data.
+</div>
+
+<!-- Header -->
+<header class="app-header">
+  <div>
+    <div class="logo">◆ SecureBootLab</div>
+    <div class="subtitle">AUTOSAR Classic · ISO/SAE 21434 · UN R155 · Phase 1 Simulation</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="security-props" id="sec-chips">
+    <div class="sec-chip on" id="chip-sb"><span class="chip-dot"></span>SECURE_BOOT</div>
+    <div class="sec-chip off" id="chip-dbg"><span class="chip-dot"></span>DEBUG_OPEN</div>
+    <div class="sec-chip on" id="chip-hsm"><span class="chip-dot"></span>HSM_READY</div>
+  </div>
+  <div class="lifecycle-badge DEVELOPMENT" id="lifecycle-badge" onclick="cycleLifecycle()">DEVELOPMENT</div>
+</header>
+
+<!-- Main 4-panel grid -->
+<div class="main-grid">
+
+  <!-- Panel 1: ECU State Monitor -->
+  <section class="panel" id="panel-ecu">
+    <div class="panel-header">
+      <span class="dot amber"></span>ECU State Monitor
+    </div>
+    <div class="panel-body">
+      <div class="state-flow" id="state-flow">
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-POWER_OFF">
+            <span class="phase-icon">⚫</span>
+            <span class="phase-label">POWER_OFF</span>
+            <span class="phase-desc">Idle</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-1"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-ROM_INIT">
+            <span class="phase-icon">🔌</span>
+            <span class="phase-label">ROM_INIT</span>
+            <span class="phase-desc">Boot ROM active</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-2"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-BOOTLOADER_VERIFY">
+            <span class="phase-icon">🔑</span>
+            <span class="phase-label">BOOTLOADER_VERIFY</span>
+            <span class="phase-desc">ECDSA sig check</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-3"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-APPLICATION_VERIFY">
+            <span class="phase-icon">🔒</span>
+            <span class="phase-label">APPLICATION_VERIFY</span>
+            <span class="phase-desc">Hash + sig + version</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-4"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-NORMAL_OPERATION">
+            <span class="phase-icon">✅</span>
+            <span class="phase-label">NORMAL_OPERATION</span>
+            <span class="phase-desc">Chain of trust verified</span>
+          </div>
+        </div>
+
+        <div class="side-paths" style="margin-top:8px;">
+          <div class="side-path-node" id="phase-SAFE_STATE">
+            <span class="phase-icon">🛑</span>
+            <span class="phase-label">SAFE_STATE</span>
+          </div>
+          <div class="side-path-node" id="phase-RECOVERY_MODE">
+            <span class="phase-icon">🔧</span>
+            <span class="phase-label">RECOVERY_MODE</span>
+          </div>
+          <div class="side-path-node" id="phase-LOCKED_OUT">
+            <span class="phase-icon">🔐</span>
+            <span class="phase-label">LOCKED_OUT</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ecu-props">
+        <div class="ecu-prop">
+          <div class="prop-key">Boot Attempts</div>
+          <div class="prop-val" id="prop-attempts">0</div>
+        </div>
+        <div class="ecu-prop">
+          <div class="prop-key">Lifecycle</div>
+          <div class="prop-val amber" id="prop-lifecycle">DEVELOPMENT</div>
+        </div>
+        <div class="ecu-prop">
+          <div class="prop-key">Secure Boot</div>
+          <div class="prop-val green" id="prop-sb">ENABLED</div>
+        </div>
+        <div class="ecu-prop">
+          <div class="prop-key">Debug Interface</div>
+          <div class="prop-val green" id="prop-dbg">OPEN</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Panel 2: Operation Console -->
+  <section class="panel" id="panel-console">
+    <div class="panel-header">
+      <span class="dot blue"></span>Operation Console
+    </div>
+    <div class="panel-body">
+
+      <div class="scenario-selector">
+        <label>Select Scenario</label>
+        <div class="scenario-tabs" id="scenario-tabs">
+          <div class="scenario-tab active" data-scenario="happy-path" onclick="selectScenario('happy-path')">Happy Path Boot</div>
+          <div class="scenario-tab" data-scenario="tampered" onclick="selectScenario('tampered')">Tampered Image</div>
+          <div class="scenario-tab" data-scenario="power-loss" onclick="selectScenario('power-loss')">Power Loss Recovery</div>
+          <div class="scenario-tab" data-scenario="debug-lock" onclick="selectScenario('debug-lock')">Debug Lock Check</div>
+        </div>
+      </div>
+
+      <div class="console-controls">
+        <button class="btn btn-primary" id="btn-autorun" onclick="autoRun()">▶ Auto Run</button>
+        <button class="btn btn-secondary" id="btn-step" onclick="stepForward()">⏭ Step</button>
+        <button class="btn btn-secondary" onclick="resetScenario()">↺ Reset</button>
+        <div style="flex:1"></div>
+        <div id="console-result"></div>
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+
+      <div class="step-display" id="step-display">
+        <div class="step-num">Current Step</div>
+        <div class="step-title" id="step-title">Ready</div>
+        <div class="step-detail" id="step-detail">Select a scenario and press ▶ Auto Run or ⏭ Step to begin.</div>
+      </div>
+
+      <div style="margin-top:4px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);margin-bottom:6px;">Chain of Trust Verification</div>
+        <div id="cot-steps" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Panel 3: Test Scenario Runner -->
+  <section class="panel" id="panel-vtc">
+    <div class="panel-header">
+      <span class="dot green"></span>Test Scenario Runner — VT-01 to VT-22
+    </div>
+    <div class="vtc-toolbar">
+      <button class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="runAllVTCs()">▶ Run All</button>
+      <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="clearAllVTCStatus()">↺ Clear</button>
+    </div>
+    <div class="panel-body" style="padding:6px;">
+      <div class="vtc-list" id="vtc-list"></div>
+    </div>
+  </section>
+
+  <!-- Panel 4: Event Log -->
+  <section class="panel" id="panel-log">
+    <div class="panel-header">
+      <span class="dot red"></span>Security Event Log
+      <div style="flex:1"></div>
+      <span style="cursor:pointer;color:var(--text-dim);font-size:10px;" onclick="clearLog()">⊘ Clear</span>
+    </div>
+    <div class="panel-body" style="padding:0;">
+      <div class="event-log" id="event-log"></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+// ============================================================
+// ECU State Machine (JavaScript simulation)
+// ============================================================
+const BootPhase = {
+  POWER_OFF:          'POWER_OFF',
+  ROM_INIT:           'ROM_INIT',
+  BOOTLOADER_VERIFY:  'BOOTLOADER_VERIFY',
+  APPLICATION_VERIFY: 'APPLICATION_VERIFY',
+  NORMAL_OPERATION:   'NORMAL_OPERATION',
+  SAFE_STATE:         'SAFE_STATE',
+  RECOVERY_MODE:      'RECOVERY_MODE',
+  LOCKED_OUT:         'LOCKED_OUT',
+};
+
+const state = {
+  bootPhase:          BootPhase.POWER_OFF,
+  lifecycle:          'DEVELOPMENT',
+  secureBootEnabled:  true,
+  debugLocked:        false,
+  bootAttemptCount:   0,
+  lastFailureReason:  null,
+  attestationHash:    null,
+};
+
+let _logTs = 0;
+function nextTs() { _logTs += Math.floor(Math.random()*80 + 30); return _logTs; }
+
+// ============================================================
+// Render helpers
+// ============================================================
+function setPhase(phase, mode) {
+  // mode: 'active' | 'success' | 'failure' | ''
+  const mainPhases = ['POWER_OFF','ROM_INIT','BOOTLOADER_VERIFY','APPLICATION_VERIFY','NORMAL_OPERATION'];
+  const sidePhases = ['SAFE_STATE','RECOVERY_MODE','LOCKED_OUT'];
+
+  mainPhases.forEach(p => {
+    const el = document.getElementById('phase-' + p);
+    el.className = 'phase-node' + (p === phase ? (' ' + (mode||'active')) : '');
+  });
+  sidePhases.forEach(p => {
+    const el = document.getElementById('phase-' + p);
+    if (!el) return;
+    el.className = 'side-path-node';
+    if (p === phase) {
+      if (p === 'LOCKED_OUT') el.classList.add('locked');
+      else el.classList.add('active');
+    }
+  });
+
+  // Highlight connector lines up to current phase
+  const order = mainPhases;
+  const idx = order.indexOf(phase);
+  for (let i = 1; i <= 4; i++) {
+    const line = document.getElementById('line-' + i);
+    if (!line) continue;
+    line.className = 'line' + (i <= idx ? ' active' : '');
+  }
+
+  state.bootPhase = phase;
+  updateECUProps();
+}
+
+function updateECUProps() {
+  document.getElementById('prop-attempts').textContent = state.bootAttemptCount;
+  const lc = document.getElementById('prop-lifecycle');
+  lc.textContent = state.lifecycle;
+  lc.className = 'prop-val ' + (state.lifecycle === 'DEVELOPMENT' ? 'amber' : state.lifecycle === 'PRODUCTION' ? 'red' : 'amber');
+  const sb = document.getElementById('prop-sb');
+  sb.textContent = state.secureBootEnabled ? 'ENABLED' : 'DISABLED';
+  sb.className = 'prop-val ' + (state.secureBootEnabled ? 'green' : 'red');
+  const dbg = document.getElementById('prop-dbg');
+  dbg.textContent = state.debugLocked ? 'LOCKED' : 'OPEN';
+  dbg.className = 'prop-val ' + (state.debugLocked ? 'red' : 'green');
+
+  // Security chips
+  updateChip('chip-sb',  state.secureBootEnabled, 'SECURE_BOOT');
+  updateChip('chip-dbg', !state.debugLocked,       'DEBUG_OPEN', 'DEBUG_LOCKED');
+}
+
+function updateChip(id, on, labelOn, labelOff) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const dot = el.querySelector('.chip-dot');
+  const textNode = [...el.childNodes].find(n => n.nodeType === 3);
+  if (on) { el.className = 'sec-chip on'; if(textNode) textNode.textContent = labelOn; }
+  else     { el.className = 'sec-chip off'; if(textNode) textNode.textContent = (labelOff||labelOn); }
+}
+
+function updateLifecycleBadge() {
+  const badge = document.getElementById('lifecycle-badge');
+  badge.textContent = state.lifecycle;
+  badge.className = 'lifecycle-badge ' + state.lifecycle;
+  document.getElementById('prop-lifecycle').textContent = state.lifecycle;
+  if (state.lifecycle === 'PRODUCTION') {
+    state.debugLocked = true;
+  } else {
+    state.debugLocked = false;
+  }
+  updateECUProps();
+}
+
+function cycleLifecycle() {
+  const lcs = ['DEVELOPMENT','PRODUCTION','EOL'];
+  state.lifecycle = lcs[(lcs.indexOf(state.lifecycle) + 1) % lcs.length];
+  updateLifecycleBadge();
+  logEvent('LIFECYCLE_CHANGED', 'INFO', 'Lifecycle changed to ' + state.lifecycle, 'SWR-C-011');
+}
+
+// ============================================================
+// Event Log
+// ============================================================
+function clearLog() {
+  document.getElementById('event-log').innerHTML = '';
+  _logTs = 0;
+}
+
+function logEvent(evtId, severity, message, swrRef) {
+  const log = document.getElementById('event-log');
+  const ms = nextTs();
+  const ts = (ms / 1000).toFixed(2) + 's';
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML =
+    `<span class="log-ts">${ts}</span>` +
+    `<span class="log-sev ${severity}">${severity}</span>` +
+    `<span class="log-msg ${severity}">${message}</span>` +
+    `<span class="log-swr">${swrRef || ''}</span>`;
+  log.appendChild(entry);
+
+  // Add divider for CRITICAL
+  if (severity === 'CRITICAL' || severity === 'TAMPER') {
+    const div = document.createElement('div');
+    div.className = 'log-divider';
+    log.appendChild(div);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+// ============================================================
+// Chain of Trust visualizer
+// ============================================================
+const COT_STEPS = [
+  { id:'cot-bl-hash',  label:'Bootloader SHA-256' },
+  { id:'cot-bl-sig',   label:'Bootloader ECDSA P-256' },
+  { id:'cot-app-hash', label:'Application SHA-256' },
+  { id:'cot-app-sig',  label:'Application ECDSA P-256' },
+  { id:'cot-ver',      label:'Anti-rollback Counter' },
+  { id:'cot-att',      label:'Attestation Measurement' },
+];
+
+function initCOTSteps() {
+  const container = document.getElementById('cot-steps');
+  container.innerHTML = '';
+  COT_STEPS.forEach(s => {
+    const row = document.createElement('div');
+    row.id = s.id;
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:var(--bg-panel2);transition:all .35s;';
+    row.innerHTML = `<span style="width:12px;text-align:center;font-size:11px;">○</span><span style="font-size:11px;color:var(--text-dim);">${s.label}</span><span style="margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--text-dim);">—</span>`;
+    container.appendChild(row);
+  });
+}
+
+function setCOTStep(id, status, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const icon = el.querySelector('span:first-child');
+  const text = el.querySelector('span:last-child');
+  if (status === 'ok') {
+    el.style.borderColor = 'var(--green)';
+    el.style.background = 'var(--green-glow)';
+    icon.textContent = '✓';
+    icon.style.color = 'var(--green)';
+    if (text) { text.textContent = value || 'OK'; text.style.color = 'var(--green)'; }
+  } else if (status === 'fail') {
+    el.style.borderColor = 'var(--red)';
+    el.style.background = 'var(--red-glow)';
+    icon.textContent = '✗';
+    icon.style.color = 'var(--red)';
+    if (text) { text.textContent = value || 'FAILED'; text.style.color = 'var(--red)'; }
+  } else if (status === 'running') {
+    el.style.borderColor = 'var(--amber)';
+    el.style.background = 'var(--amber-glow)';
+    icon.textContent = '◌';
+    icon.style.color = 'var(--amber)';
+    if (text) { text.textContent = value || '...'; text.style.color = 'var(--amber)'; }
+  }
+}
+
+function resetCOTSteps() {
+  COT_STEPS.forEach(s => {
+    const el = document.getElementById(s.id);
+    if (!el) return;
+    const icon = el.querySelector('span:first-child');
+    const text = el.querySelector('span:last-child');
+    el.style.borderColor = 'var(--border)';
+    el.style.background = 'var(--bg-panel2)';
+    icon.textContent = '○'; icon.style.color = 'var(--text-dim)';
+    if (text) { text.textContent = '—'; text.style.color = 'var(--text-dim)'; }
+  });
+}
+
+// ============================================================
+// Scenarios
+// ============================================================
+const SCENARIOS = {
+  'happy-path': {
+    name: 'Happy Path Boot',
+    steps: [
+      {
+        title: 'Power On — Boot ROM Initialised',
+        detail: 'ECU powers up. Boot ROM at address 0x00000000 begins executing.\nBoot attempt counter incremented. ROM is immutable — no modification possible.',
+        action: () => {
+          state.bootAttemptCount++;
+          setPhase(BootPhase.ROM_INIT, 'active');
+          logEvent('BOOT_SEQUENCE_STARTED', 'INFO', 'Boot sequence started — Boot ROM active', 'SWR-C-001');
+          logEvent('BOOT_COUNTER_INC', 'INFO', 'Boot attempt counter: ' + state.bootAttemptCount, 'SWR-C-012');
+        }
+      },
+      {
+        title: 'Bootloader Hash — SHA-256 computed',
+        detail: 'CryptoProvider → CSM → CryIf → HSM.\nSHA-256 digest of bootloader image computed: a7f3...c2d1.',
+        action: () => {
+          setPhase(BootPhase.BOOTLOADER_VERIFY, 'active');
+          setCOTStep('cot-bl-hash', 'running', 'Computing...');
+          logEvent('BL_HASH_COMPUTE', 'INFO', 'SHA-256 hash of bootloader: a7f3d2...c2d1', 'SWR-C-003');
+        }
+      },
+      {
+        title: 'Bootloader Signature — ECDSA P-256 verified',
+        detail: 'Signature verified against OEM signing key (oem_signing_key) stored in HSM.\nKey material never leaves hsm.py boundary.',
+        action: () => {
+          setCOTStep('cot-bl-hash', 'ok', 'a7f3...c2d1');
+          setCOTStep('cot-bl-sig', 'running', 'Verifying...');
+          logEvent('BL_SIG_VERIFY', 'INFO', 'ECDSA P-256 signature valid — oem_signing_key', 'SWR-C-005');
+        }
+      },
+      {
+        title: 'Bootloader Accepted — Version v2 > counter 0',
+        detail: 'Anti-rollback: version=2, NvM rollback counter=0. 2 > 0 → accepted.\nBootloader trusted. Handoff to Application layer.',
+        action: () => {
+          setCOTStep('cot-bl-sig', 'ok', 'VALID');
+          setCOTStep('cot-ver', 'running', 'v2 > 0?');
+          logEvent('BL_VERSION_OK', 'INFO', 'Bootloader version v2 > counter 0 — accepted', 'SWR-C-006');
+          setCOTStep('cot-ver', 'ok', 'v2 > 0 ✓');
+        }
+      },
+      {
+        title: 'Application Hash + Signature — verified',
+        detail: 'Application image hash (SHA-256) computed and ECDSA P-256 signature verified.\nManifest fields: image_hash, signature, version, not_after all validated.',
+        action: () => {
+          setPhase(BootPhase.APPLICATION_VERIFY, 'active');
+          setCOTStep('cot-app-hash', 'running', 'Computing...');
+          logEvent('APP_HASH_COMPUTE', 'INFO', 'SHA-256 hash of application: b8e1...f4a2', 'SWR-C-003');
+          setCOTStep('cot-app-hash', 'ok', 'b8e1...f4a2');
+          setCOTStep('cot-app-sig', 'running', 'Verifying...');
+          logEvent('APP_SIG_VERIFY', 'INFO', 'ECDSA P-256 signature valid — chain of trust intact', 'SWR-C-005');
+          setCOTStep('cot-app-sig', 'ok', 'VALID');
+        }
+      },
+      {
+        title: 'Attestation Measurement recorded',
+        detail: 'AttestationService records SHA-256 digest in NvM attestation log.\nMeasured boot evidence available for remote attestation backend.',
+        action: () => {
+          setCOTStep('cot-att', 'running', 'Measuring...');
+          logEvent('MEASURED_APPLICATION', 'INFO', 'Attestation hash recorded: b8e1...f4a2', 'SR-019');
+          setCOTStep('cot-att', 'ok', 'b8e1...f4a2');
+        }
+      },
+      {
+        title: '✅ NORMAL_OPERATION — Secure Boot Complete',
+        detail: 'Full chain of trust verified:\n  • Boot ROM ✓ → Bootloader ✓ → Application ✓\nECU now running authenticated firmware.',
+        action: () => {
+          setPhase(BootPhase.NORMAL_OPERATION, 'success');
+          logEvent('APPLICATION_VERIFIED_BOOT_COMPLETE', 'INFO', 'Chain of trust verified — NORMAL_OPERATION', 'SWR-C-008');
+          showResult('PASS');
+        }
+      }
+    ]
+  },
+
+  'tampered': {
+    name: 'Tampered Application Image',
+    steps: [
+      {
+        title: 'Power On — Boot ROM Initialised',
+        detail: 'ECU powers up. Boot ROM begins executing. Boot counter incremented.',
+        action: () => {
+          state.bootAttemptCount++;
+          setPhase(BootPhase.ROM_INIT, 'active');
+          logEvent('BOOT_SEQUENCE_STARTED', 'INFO', 'Boot sequence started', 'SWR-C-001');
+        }
+      },
+      {
+        title: 'Bootloader passes verification',
+        detail: 'Bootloader hash and ECDSA signature both valid.\nBootloader trusted — continuing to application stage.',
+        action: () => {
+          setPhase(BootPhase.BOOTLOADER_VERIFY, 'active');
+          setCOTStep('cot-bl-hash', 'ok', 'a7f3...c2d1');
+          setCOTStep('cot-bl-sig',  'ok', 'VALID');
+          setCOTStep('cot-ver',     'ok', 'v2 > 0 ✓');
+          logEvent('BL_VERIFIED', 'INFO', 'Bootloader signature valid', 'SWR-C-005');
+        }
+      },
+      {
+        title: 'Application image TAMPERED — last 4 bytes modified',
+        detail: 'Attacker modified bytes [end-4 .. end] of application image.\nOriginal signature is now INVALID for tampered payload.\n\nModified: 0x41 0x50 0x50 0x00 → 0xDE 0xAD 0xBE 0xEF',
+        action: () => {
+          setPhase(BootPhase.APPLICATION_VERIFY, 'active');
+          setCOTStep('cot-app-hash', 'running', 'Computing...');
+          logEvent('APP_HASH_MISMATCH', 'CRITICAL', 'Application hash MISMATCH — image tampered', 'SWR-C-003');
+          setCOTStep('cot-app-hash', 'fail', 'MISMATCH');
+          setCOTStep('cot-app-sig',  'fail', 'INVALID');
+          logEvent('APP_SIG_INVALID', 'CRITICAL', 'ECDSA signature INVALID — verification failed', 'SWR-C-005');
+        }
+      },
+      {
+        title: '🛑 SAFE_STATE — Boot halted on tampered image',
+        detail: 'SecureBootManager transitions ECU to SAFE_STATE.\nCritical DEM event logged. NvM last_security_event updated.\nECU will not execute unauthenticated code.',
+        action: () => {
+          setPhase(BootPhase.SAFE_STATE, 'failure');
+          state.lastFailureReason = 'app_sig_invalid';
+          logEvent('TAMPER_SIGNATURE', 'CRITICAL', '⚠ TAMPER DETECTED — application image rejected, SAFE_STATE entered', 'SWR-C-015');
+          showResult('FAIL');
+        }
+      },
+      {
+        title: '🔧 Recovery Mode — awaiting authenticated image',
+        detail: 'RecoveryManager.enter_recovery_mode() called.\nECU awaits OEM-signed recovery image via execute_recovery_flash().\nOnly images signed with oem_signing_key are accepted.',
+        action: () => {
+          setPhase(BootPhase.RECOVERY_MODE, 'active');
+          logEvent('RECOVERY_MODE_ENTERED', 'WARNING', 'Recovery mode entered — awaiting OEM-signed image', 'SWR-C-009');
+          showResult('FAIL');
+        }
+      }
+    ]
+  },
+
+  'power-loss': {
+    name: 'Power Loss Recovery',
+    steps: [
+      {
+        title: 'Power loss detected — boot counter read from NvM',
+        detail: 'Power was interrupted during previous boot sequence.\nSecureBootManager.handle_interruption() called.\nNvM boot_counter = 2 (max = 3).',
+        action: () => {
+          setPhase(BootPhase.ROM_INIT, 'active');
+          logEvent('BOOT_INTERRUPTED', 'WARNING', 'Boot interrupted — counter: 2, max: 3', 'SWR-C-012');
+        }
+      },
+      {
+        title: 'Counter below threshold — retry allowed',
+        detail: '2 ≤ MAX_BOOT_RETRY_ATTEMPTS (3) → retry allowed.\nECU transitions back to ROM_INIT for clean retry.',
+        action: () => {
+          logEvent('BOOT_RETRY', 'WARNING', 'Boot retry authorised — counter 2/3', 'SWR-C-012');
+          logEvent('BOOT_SEQUENCE_STARTED', 'INFO', 'Clean retry from ROM_INIT', 'SWR-C-001');
+        }
+      },
+      {
+        title: 'UpdateManager — rollback to known-good image',
+        detail: 'Pending update was not activated atomically.\nUpdateManager.rollback_update() restores previous_application_image → active_application_image.',
+        action: () => {
+          logEvent('UPDATE_ROLLED_BACK', 'WARNING', 'Atomic rollback — previous known-good image restored', 'SR-010');
+        }
+      },
+      {
+        title: 'Retry boot — application signature valid',
+        detail: 'Retrying with restored known-good image.\nAll signature and version checks pass on second attempt.',
+        action: () => {
+          state.bootAttemptCount = 2;
+          setPhase(BootPhase.BOOTLOADER_VERIFY, 'active');
+          setCOTStep('cot-bl-hash', 'ok', 'a7f3...c2d1');
+          setCOTStep('cot-bl-sig',  'ok', 'VALID');
+          setPhase(BootPhase.APPLICATION_VERIFY, 'active');
+          setCOTStep('cot-app-hash', 'ok', 'b8e1...f4a2');
+          setCOTStep('cot-app-sig',  'ok', 'VALID');
+          setCOTStep('cot-ver',      'ok', 'v1 > 0 ✓');
+          setCOTStep('cot-att',      'ok', 'b8e1...f4a2');
+          logEvent('APP_VERIFIED_RETRY', 'INFO', 'Application verified on retry — boot continues', 'SWR-C-005');
+        }
+      },
+      {
+        title: '✅ NORMAL_OPERATION — Boot successful after power-loss retry',
+        detail: 'ECU successfully recovered from power-loss interruption.\nBoot counter reset. Rollback protection preserved integrity.',
+        action: () => {
+          setPhase(BootPhase.NORMAL_OPERATION, 'success');
+          logEvent('BOOT_COMPLETE', 'INFO', 'Normal operation restored after power-loss recovery', 'SWR-C-012');
+          showResult('PASS');
+        }
+      }
+    ]
+  },
+
+  'debug-lock': {
+    name: 'Debug Lock Check',
+    steps: [
+      {
+        title: 'Startup — DebugManager checks lifecycle',
+        detail: 'DebugManager.check_debug_lock_on_startup() reads lifecycle from ECU state.\nCurrent lifecycle: DEVELOPMENT → debug interface OPEN.',
+        action: () => {
+          setPhase(BootPhase.ROM_INIT, 'active');
+          logEvent('DEBUG_LOCK_CHECKED', 'INFO', 'Lifecycle: DEVELOPMENT — debug interface open', 'SWR-C-011');
+        }
+      },
+      {
+        title: 'Transition to PRODUCTION lifecycle',
+        detail: 'ECU lifecycle upgraded to PRODUCTION (models hardware fuse write).\nDebug interface automatically LOCKED per policy.',
+        action: () => {
+          state.lifecycle = 'PRODUCTION';
+          state.debugLocked = true;
+          updateLifecycleBadge();
+          logEvent('LIFECYCLE_TRANSITION', 'WARNING', 'Lifecycle → PRODUCTION: debug interface locked', 'SWR-C-011');
+        }
+      },
+      {
+        title: 'Attempt 1 — invalid debug credential rejected',
+        detail: 'DebugManager.gate_debug_access(b"\\x00"*72) called.\nInvalid ECDSA credential — HSM verification fails.\nAccess DENIED. Critical event logged.',
+        action: () => {
+          logEvent('DEBUG_ACCESS_DENIED', 'CRITICAL', 'Debug access DENIED — invalid credential (0x0000..72 bytes)', 'SR-014');
+        }
+      },
+      {
+        title: 'Attempt 2 — secure boot disabled in NvM (tamper)',
+        detail: 'NvM shows secure_boot_enabled = False.\nThis is a tamper indicator — someone tried to disable secure boot.\nECU raises DebugManagerError and re-enforces secure boot.',
+        action: () => {
+          logEvent('TAMPER_SB_DISABLED', 'CRITICAL', '⚠ TAMPER: secure_boot_enabled=False in NvM — re-enforcing', 'SWR-C-015');
+          logEvent('SB_REENFORCED', 'WARNING', 'secure_boot_enabled restored to True — NvM updated', 'SR-009');
+        }
+      },
+      {
+        title: '✅ Valid ECDSA credential — debug access GRANTED',
+        detail: 'OEM-provided credential: ECDSA signature of b"debug_access_request_v1" under debug_auth_key.\nHSM verifies successfully. Debug interface temporarily opened for authenticated session.',
+        action: () => {
+          logEvent('DEBUG_ACCESS_GRANTED', 'INFO', 'Debug access GRANTED — valid ECDSA credential (debug_auth_key)', 'SR-014');
+          showResult('PASS');
+        }
+      }
+    ]
+  }
+};
+
+// ============================================================
+// Scenario Player
+// ============================================================
+let currentScenario = 'happy-path';
+let currentStepIdx = -1;
+let autoRunTimer = null;
+
+function selectScenario(id) {
+  currentScenario = id;
+  document.querySelectorAll('.scenario-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.scenario === id);
+  });
+  resetScenario();
+}
+
+function resetScenario() {
+  if (autoRunTimer) { clearTimeout(autoRunTimer); autoRunTimer = null; }
+  currentStepIdx = -1;
+
+  // Reset ECU state
+  state.bootAttemptCount = 0;
+  state.lastFailureReason = null;
+  state.lifecycle = document.getElementById('lifecycle-badge').textContent.trim();
+  if (state.lifecycle === 'PRODUCTION') state.debugLocked = true; else state.debugLocked = false;
+
+  setPhase(BootPhase.POWER_OFF);
+  resetCOTSteps();
+  document.getElementById('console-result').innerHTML = '';
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('step-title').textContent = 'Ready';
+  document.getElementById('step-detail').textContent = 'Select a scenario and press ▶ Auto Run or ⏭ Step to begin.';
+  document.getElementById('step-display').querySelector('.step-num').textContent = 'Current Step';
+  document.getElementById('btn-autorun').disabled = false;
+  document.getElementById('btn-step').disabled = false;
+}
+
+function stepForward() {
+  const steps = SCENARIOS[currentScenario].steps;
+  currentStepIdx++;
+  if (currentStepIdx >= steps.length) { currentStepIdx = steps.length - 1; return; }
+  executeStep(steps[currentStepIdx], currentStepIdx, steps.length);
+}
+
+function executeStep(step, idx, total) {
+  const pct = Math.round(((idx + 1) / total) * 100);
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('step-display').querySelector('.step-num').textContent = `Step ${idx + 1} / ${total}`;
+  document.getElementById('step-title').textContent = step.title;
+  document.getElementById('step-detail').textContent = step.detail;
+  step.action();
+}
+
+function autoRun() {
+  document.getElementById('btn-autorun').disabled = true;
+  const steps = SCENARIOS[currentScenario].steps;
+  const delay = 1100;
+
+  function runNext() {
+    if (currentStepIdx >= steps.length - 1) {
+      document.getElementById('btn-autorun').disabled = false;
+      return;
+    }
+    stepForward();
+    autoRunTimer = setTimeout(runNext, delay);
+  }
+  runNext();
+}
+
+function showResult(status) {
+  const el = document.getElementById('console-result');
+  el.innerHTML = `<span class="result-badge ${status}">${status === 'PASS' ? '✓ PASS' : '✗ FAIL'}</span>`;
+}
+
+// ============================================================
+// VTC Definitions
+// ============================================================
+const VTC_DEFS = [
+  { id:'VT-01', desc:'Application image signature verification' },
+  { id:'VT-02', desc:'Secure boot: no stored image → SAFE_STATE' },
+  { id:'VT-03', desc:'Anti-rollback: monotonic counter enforcement' },
+  { id:'VT-04', desc:'Manifest validator: structural and temporal' },
+  { id:'VT-05', desc:'Recovery mode: enter and authenticated flash' },
+  { id:'VT-06', desc:'Debug manager: production lock + tamper detect' },
+  { id:'VT-07', desc:'Power-loss: boot retry and lockout' },
+  { id:'VT-08', desc:'Tamper/glitch: HSM fail-mode detection' },
+  { id:'VT-09', desc:'Debug interface lock: credential gate' },
+  { id:'VT-10', desc:'Key non-exportability: HSM boundary policy' },
+  { id:'VT-11', desc:'Recovery mode: authenticated image flashing' },
+  { id:'VT-12', desc:'Replay attack: same-version reflash blocked' },
+  { id:'VT-13', desc:'Hash integrity: single-bit flip detected' },
+  { id:'VT-14', desc:'Chain of trust: full boot sequence' },
+  { id:'VT-15', desc:'Boot log: hash-chain integrity protection' },
+  { id:'VT-16', desc:'Key provisioning: rotation audit' },
+  { id:'VT-17', desc:'Crypto algorithm compliance: SHA-256 / ECDSA' },
+  { id:'VT-18', desc:'Performance timing', skip: true },
+  { id:'VT-19', desc:'Environmental stress', skip: true },
+  { id:'VT-20', desc:'End-to-end regression: full flow' },
+  { id:'VT-21', desc:'Certificate chain validation' },
+  { id:'VT-22', desc:'Certificate expiration: reject expired manifests' },
+];
+
+// Scripted VTC outcomes: each array item = { delay, logSev, logMsg, logSwr, result }
+const VTC_SCRIPTS = {
+  'VT-01': [
+    { delay:200, sev:'INFO',     msg:'Computing SHA-256 of application image (v2 valid payload)', swr:'SWR-C-003' },
+    { delay:300, sev:'INFO',     msg:'ECDSA P-256 signature verified — oem_signing_key', swr:'SWR-C-005' },
+    { delay:200, sev:'CRITICAL', msg:'Tampered image: ECDSA verification FAILED', swr:'SWR-C-005' },
+    { delay:200, sev:'INFO',     msg:'verify_image_signature(tampered, sig) → False', swr:'SWR-C-005', result:'PASS' },
+  ],
+  'VT-02': [
+    { delay:200, sev:'INFO',     msg:'run_boot_sequence() — reading active_application_image from NvM', swr:'SWR-C-001' },
+    { delay:300, sev:'CRITICAL', msg:'No application image stored — NvM key not found', swr:'SWR-C-001' },
+    { delay:200, sev:'WARNING',  msg:'ECU transitions to SAFE_STATE (no_application_image)', swr:'SWR-C-001', result:'PASS' },
+  ],
+  'VT-03': [
+    { delay:200, sev:'INFO',     msg:'validate_version("application", 1) — counter=0 → 1 > 0 ✓', swr:'SWR-C-006' },
+    { delay:250, sev:'INFO',     msg:'commit_version("application", 1) — counter ratcheted to 1', swr:'SWR-C-007' },
+    { delay:250, sev:'CRITICAL', msg:'validate_version("application", 1) — 1 ≤ 1 → BLOCKED (replay)', swr:'SWR-C-007' },
+    { delay:200, sev:'INFO',     msg:'is_rollback("application", 0) → True  |  is_rollback("application", 1) → False', swr:'SWR-C-007', result:'PASS' },
+  ],
+  'VT-04': [
+    { delay:200, sev:'INFO',     msg:'ManifestValidator.validate(valid_bytes) → Manifest(version=2) ✓', swr:'SWR-C-014' },
+    { delay:250, sev:'CRITICAL', msg:'validate(b"{ not json !!!") → ManifestError raised ✓', swr:'SWR-C-014' },
+    { delay:200, sev:'CRITICAL', msg:'validate(expired not_after=2020) → ManifestError raised ✓', swr:'SWR-C-014', result:'PASS' },
+  ],
+  'VT-05': [
+    { delay:200, sev:'WARNING',  msg:'enter_recovery_mode("test_recovery") — ECU → SAFE_STATE', swr:'SWR-C-009' },
+    { delay:300, sev:'INFO',     msg:'execute_recovery_flash(image, valid_sig) → True ✓', swr:'SR-017' },
+    { delay:250, sev:'CRITICAL', msg:'execute_recovery_flash(image, invalid_sig) → False ✓ (rejected)', swr:'SR-017', result:'PASS' },
+  ],
+  'VT-06': [
+    { delay:200, sev:'INFO',     msg:'ECU lifecycle = PRODUCTION, NvM secure_boot_enabled = False', swr:'SR-009' },
+    { delay:300, sev:'CRITICAL', msg:'TAMPER: SECURE_BOOT_DISABLED_IN_PRODUCTION detected in NvM', swr:'SWR-C-015' },
+    { delay:250, sev:'WARNING',  msg:'secure_boot re-enforced = True, DebugManagerError raised ✓', swr:'SR-009', result:'PASS' },
+  ],
+  'VT-07': [
+    { delay:200, sev:'WARNING',  msg:'handle_interruption() — NvM boot_counter = MAX+1 = 4', swr:'SWR-C-012' },
+    { delay:300, sev:'CRITICAL', msg:'BOOT_LOCKOUT: counter exceeded MAX_BOOT_RETRY_ATTEMPTS (3)', swr:'SWR-C-012' },
+    { delay:250, sev:'INFO',     msg:'Second sim: counter=1 < 3 → ROM_INIT retry ✓', swr:'SWR-C-012', result:'PASS' },
+  ],
+  'VT-08': [
+    { delay:200, sev:'INFO',     msg:'HSM.simulate_failure(True) — fail-mode active', swr:'SWR-C-015' },
+    { delay:300, sev:'CRITICAL', msg:'verify_image_signature() → HSMError("unavailable") → CryptoProviderError raised ✓', swr:'SWR-C-015', result:'PASS' },
+  ],
+  'VT-09': [
+    { delay:200, sev:'INFO',     msg:'PRODUCTION lifecycle — debug_locked = True', swr:'SR-014' },
+    { delay:250, sev:'CRITICAL', msg:'gate_debug_access(invalid_cred) → False — access DENIED ✓', swr:'SR-014' },
+    { delay:250, sev:'INFO',     msg:'gate_debug_access(valid_ecdsa_cred) → True — access GRANTED ✓', swr:'SR-014', result:'PASS' },
+  ],
+  'VT-10': [
+    { delay:200, sev:'INFO',     msg:'HSM._key_store is private — no public API exposes bytes', swr:'SR-011' },
+    { delay:250, sev:'INFO',     msg:'get_public_key_pem() returns PEM — no private key material ✓', swr:'SR-011' },
+    { delay:200, sev:'INFO',     msg:'sign() and verify() work without exposing private key ✓', swr:'SR-011', result:'PASS' },
+  ],
+  'VT-11': [
+    { delay:200, sev:'INFO',     msg:'enter_recovery_mode("test_recovery") → SAFE_STATE', swr:'SWR-C-009' },
+    { delay:250, sev:'CRITICAL', msg:'execute_recovery_flash(unsigned_image, 0x00...72) → False ✓', swr:'SR-017' },
+    { delay:250, sev:'INFO',     msg:'execute_recovery_flash(image, valid_oem_sig) → True ✓', swr:'SR-017', result:'PASS' },
+  ],
+  'VT-12': [
+    { delay:200, sev:'CRITICAL', msg:'validate_version("application", 1) after commit(1) → False (replay blocked) ✓', swr:'SWR-C-007' },
+    { delay:250, sev:'CRITICAL', msg:'validate_version("application", 0) → False (rollback) ✓', swr:'SWR-C-007' },
+    { delay:200, sev:'INFO',     msg:'validate_version("application", 2) → True (next version) ✓', swr:'SWR-C-007', result:'PASS' },
+  ],
+  'VT-13': [
+    { delay:200, sev:'INFO',     msg:'compute_image_hash(clean_image) → 32-byte SHA-256 ✓', swr:'SWR-C-003' },
+    { delay:250, sev:'CRITICAL', msg:'compute_image_hash(image XOR flip_bit[0]) → different digest ✓', swr:'SWR-C-003' },
+    { delay:200, sev:'INFO',     msg:'Hash mismatch detected — signature invalid on tampered image ✓', swr:'SWR-C-003', result:'PASS' },
+  ],
+  'VT-14': [
+    { delay:200, sev:'INFO',     msg:'boot_rom.power_on() — factory model (no stored BL in NvM)', swr:'SWR-C-001' },
+    { delay:250, sev:'INFO',     msg:'BOOTLOADER_VERIFY → APPLICATION_VERIFY → NORMAL_OPERATION ✓', swr:'SWR-C-008' },
+    { delay:200, sev:'INFO',     msg:'BootResult(success=True, phase=NORMAL_OPERATION) ✓', swr:'SWR-C-008', result:'PASS' },
+  ],
+  'VT-15': [
+    { delay:200, sev:'INFO',     msg:'log_boot_event × 2 — SHA-256 chain linked ✓', swr:'SWR-C-010' },
+    { delay:250, sev:'INFO',     msg:'verify_log_integrity() → True (chain intact) ✓', swr:'SWR-C-010' },
+    { delay:250, sev:'CRITICAL', msg:'NvM chain tip overwritten with "0" × 64 → integrity fails ✓', swr:'SWR-C-015', result:'PASS' },
+  ],
+  'VT-16': [
+    { delay:200, sev:'INFO',     msg:'oem_signing_key, oem_root_key, bootloader_key, debug_auth_key registered', swr:'SWR-C-005' },
+    { delay:250, sev:'INFO',     msg:'rotate_key(new_id, auth_sig_from_root) → True ✓', swr:'SR-020' },
+    { delay:200, sev:'CRITICAL', msg:'rotate_key(new_id, invalid_sig) → False (rejected) ✓', swr:'SR-020', result:'PASS' },
+  ],
+  'VT-17': [
+    { delay:200, sev:'INFO',     msg:'APPROVED_HASH_ALGORITHM = "SHA-256", APPROVED_SIGNATURE_ALGORITHM = "ECDSA-P256"', swr:'SWR-C-004' },
+    { delay:250, sev:'INFO',     msg:'compute_image_hash() returns 32-byte digest ✓ (SHA-256 length)', swr:'SWR-C-003' },
+    { delay:200, sev:'INFO',     msg:'ECDSA P-256 signature ≥ 70 bytes DER-encoded ✓', swr:'SWR-C-005', result:'PASS' },
+  ],
+  'VT-18': [
+    { delay:100, sev:'WARNING',  msg:'VT-18 SKIPPED — timer-dependent, run with pytest --runslow', swr:'', result:'SKIP' },
+  ],
+  'VT-19': [
+    { delay:100, sev:'WARNING',  msg:'VT-19 SKIPPED — hardware-only, run in Phase 2', swr:'', result:'SKIP' },
+  ],
+  'VT-20': [
+    { delay:200, sev:'INFO',     msg:'boot_rom.power_on() golden path → NORMAL_OPERATION ✓', swr:'SWR-C-008' },
+    { delay:250, sev:'INFO',     msg:'Rollback attempt → blocked by validate_version() ✓', swr:'SWR-C-007' },
+    { delay:200, sev:'INFO',     msg:'Recovery mode reachable after tampered-image SAFE_STATE ✓', swr:'SWR-C-009' },
+    { delay:200, sev:'INFO',     msg:'All security failures produce CRITICAL DEM events ✓', swr:'SWR-C-010', result:'PASS' },
+  ],
+  'VT-21': [
+    { delay:200, sev:'INFO',     msg:'ManifestValidator.validate(valid_manifest_bytes) → Manifest object ✓', swr:'SWR-C-008' },
+    { delay:250, sev:'CRITICAL', msg:'verify with key_id not in TrustAnchorManager → False (chain broken) ✓', swr:'SWR-C-005' },
+    { delay:200, sev:'INFO',     msg:'manifest.key_id correctly extracted during validation ✓', swr:'SWR-C-014', result:'PASS' },
+  ],
+  'VT-22': [
+    { delay:200, sev:'INFO',     msg:'ManifestValidator.validate(valid_manifest) — not_after=2099 → Manifest ✓', swr:'SWR-C-014' },
+    { delay:250, sev:'CRITICAL', msg:'validate(not_after="2020-01-01") → ManifestError (expired) ✓', swr:'SWR-C-014' },
+    { delay:200, sev:'CRITICAL', msg:'validate(not_before="2099-01-01") → ManifestError (not yet valid) ✓', swr:'SWR-C-014', result:'PASS' },
+  ],
+};
+
+// ============================================================
+// VTC Runner
+// ============================================================
+let vtcRunning = false;
+
+function buildVTCList() {
+  const list = document.getElementById('vtc-list');
+  list.innerHTML = '';
+  VTC_DEFS.forEach(vtc => {
+    const row = document.createElement('div');
+    row.className = 'vtc-row' + (vtc.skip ? ' skip' : '');
+    row.id = 'vtc-row-' + vtc.id;
+    row.innerHTML =
+      `<span class="vtc-id">${vtc.id}</span>` +
+      `<span class="vtc-desc">${vtc.desc}</span>` +
+      `<span class="vtc-status pending" id="vtc-status-${vtc.id}">—</span>` +
+      `<button class="vtc-run-btn" id="vtc-btn-${vtc.id}" onclick="runVTC('${vtc.id}')"${vtc.skip ? ' disabled' : ''}>▶ Run</button>`;
+    list.appendChild(row);
+  });
+}
+
+function runVTC(id) {
+  if (vtcRunning) return;
+  vtcRunning = true;
+  setVTCStatus(id, 'running', 'RUNNING');
+
+  const script = VTC_SCRIPTS[id] || [{ delay:100, sev:'INFO', msg:'VTC not scripted', swr:'', result:'PASS' }];
+  let cumulativeDelay = 0;
+  let finalResult = 'PASS';
+
+  script.forEach((evt, i) => {
+    cumulativeDelay += evt.delay;
+    setTimeout(() => {
+      logEvent(id + '_STEP' + (i+1), evt.sev, `[${id}] ${evt.msg}`, evt.swr);
+      if (evt.result) {
+        finalResult = evt.result;
+        setVTCStatus(id, finalResult.toLowerCase(), finalResult);
+        vtcRunning = false;
+      }
+    }, cumulativeDelay);
+  });
+}
+
+function setVTCStatus(id, cls, text) {
+  const row = document.getElementById('vtc-row-' + id);
+  const statusEl = document.getElementById('vtc-status-' + id);
+  if (!row || !statusEl) return;
+  row.className = 'vtc-row ' + cls;
+  statusEl.className = 'vtc-status ' + cls;
+  statusEl.textContent = text;
+}
+
+function clearAllVTCStatus() {
+  VTC_DEFS.forEach(vtc => {
+    const row = document.getElementById('vtc-row-' + vtc.id);
+    const statusEl = document.getElementById('vtc-status-' + vtc.id);
+    if (row) row.className = 'vtc-row' + (vtc.skip ? ' skip' : '');
+    if (statusEl) { statusEl.className = 'vtc-status pending'; statusEl.textContent = '—'; }
+  });
+  vtcRunning = false;
+}
+
+function runAllVTCs() {
+  if (vtcRunning) return;
+  clearAllVTCStatus();
+  clearLog();
+
+  const runnable = VTC_DEFS.filter(v => !v.skip);
+  let delay = 0;
+  runnable.forEach((vtc, i) => {
+    const script = VTC_SCRIPTS[vtc.id] || [{ delay:100, sev:'INFO', msg:'', swr:'', result:'PASS' }];
+    const totalDelay = script.reduce((acc, s) => acc + s.delay, 0);
+    setTimeout(() => {
+      runVTC(vtc.id);
+    }, delay);
+    delay += totalDelay + 200;
+  });
+
+  // Also run skip VTCs after a short delay
+  const skippable = VTC_DEFS.filter(v => v.skip);
+  skippable.forEach((vtc, i) => {
+    setTimeout(() => {
+      setVTCStatus(vtc.id, 'skip', 'SKIP');
+    }, delay + i * 100);
+  });
+}
+
+// ============================================================
+// Init
+// ============================================================
+function init() {
+  buildVTCList();
+  initCOTSteps();
+  setPhase(BootPhase.POWER_OFF);
+  logEvent('SYSTEM_INIT', 'INFO', 'SecureBootLab PoC Dashboard loaded — all modules simulated in JS', 'SWR-C-001');
+  logEvent('CRYPTO_READY', 'INFO', 'HSM sim ready — ECDSA P-256, SHA-256, AES-256-GCM provisioned', 'SWR-C-004');
+  logEvent('NVM_READY', 'INFO', 'NvM simulator ready — monotonic counters and rollback protection active', 'SWR-C-006');
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

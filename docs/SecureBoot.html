@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureBootLab — Live Monitor</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-root:    #080d16;
+  --bg-panel:   #0c1220;
+  --bg-panel2:  #101828;
+  --bg-active:  #131e30;
+  --border:     #1c2d44;
+  --border-hi:  #2a4060;
+
+  --text:       #b8c8dc;
+  --text-dim:   #4a6080;
+  --text-hi:    #e0ecff;
+
+  --amber:      #f0a030;
+  --amber-dim:  #7a5018;
+  --amber-glow: rgba(240,160,48,0.18);
+  --green:      #28c060;
+  --green-dim:  #0e4020;
+  --green-glow: rgba(40,192,96,0.18);
+  --red:        #e04048;
+  --red-dim:    #5a1018;
+  --red-glow:   rgba(224,64,72,0.18);
+  --blue:       #4890e8;
+  --blue-dim:   #0e2a5a;
+  --blue-glow:  rgba(72,144,232,0.15);
+
+  --font-mono: 'Consolas', 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  --font-ui:   'Segoe UI', system-ui, -apple-system, sans-serif;
+  --radius:    6px;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-root);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* ── Live Banner ── */
+.live-banner {
+  background: linear-gradient(90deg, #001a0d, #003018, #001a0d);
+  border-bottom: 2px solid var(--green);
+  padding: 10px 20px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--green);
+  letter-spacing: 0.04em;
+}
+.live-banner strong { color: #80ffa0; }
+.live-banner code {
+  background: rgba(40,192,96,0.12);
+  border: 1px solid var(--green-dim);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* ── App Header ── */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+.app-header .logo {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: bold;
+  color: var(--amber);
+  letter-spacing: 0.06em;
+}
+.app-header .subtitle {
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.app-header .spacer { flex: 1; }
+
+/* WebSocket status */
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  border: 1px solid;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.3s;
+  cursor: default;
+}
+.ws-status .ws-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.ws-status.connecting { border-color: var(--amber); color: var(--amber); }
+.ws-status.connecting .ws-dot { background: var(--amber); animation: pulse 1s infinite; }
+.ws-status.connected   { border-color: var(--green); color: var(--green); }
+.ws-status.connected .ws-dot { background: var(--green); }
+.ws-status.disconnected { border-color: var(--red); color: var(--red); cursor: pointer; }
+.ws-status.disconnected .ws-dot { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.lifecycle-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 3px;
+  border: 1px solid;
+}
+.lifecycle-badge.DEVELOPMENT { background: var(--blue-dim); color: var(--blue); border-color: var(--blue); }
+.lifecycle-badge.PRODUCTION  { background: var(--red-dim);  color: var(--red);  border-color: var(--red); }
+.lifecycle-badge.EOL         { background: var(--amber-dim);color: var(--amber);border-color: var(--amber); }
+
+/* ── Main Grid ── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  grid-template-rows: 1fr 1fr;
+  height: calc(100vh - 93px);
+  gap: 1px;
+  background: var(--border);
+}
+
+/* ── Panel Base ── */
+.panel {
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-panel2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.panel-header .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+}
+.panel-header .dot.green { background: var(--green); }
+.panel-header .dot.red   { background: var(--red); }
+.panel-header .dot.blue  { background: var(--blue); }
+.panel-body { flex: 1; overflow-y: auto; padding: 14px; }
+.panel-body::-webkit-scrollbar { width: 5px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+/* ── Panel 1: ECU State ── */
+.state-flow { display:flex; flex-direction:column; gap:0; }
+.phase-row  { display:flex; align-items:center; gap:10px; width:100%; }
+.phase-connector { display:flex; flex-direction:column; align-items:center; margin-left:14px; }
+.phase-connector .line { width:2px; height:13px; background:var(--border-hi); transition:background .4s; }
+.phase-connector .line.active { background:var(--amber); }
+
+.phase-node {
+  position:relative; display:flex; align-items:center; gap:10px; width:100%;
+  padding:6px 11px; border-radius:var(--radius); border:1px solid var(--border);
+  background:var(--bg-panel2); transition:all .3s ease;
+}
+.phase-node .phase-icon { font-size:14px; width:20px; text-align:center; flex-shrink:0; }
+.phase-node .phase-label { font-family:var(--font-mono); font-size:11px; font-weight:600; letter-spacing:.04em; color:var(--text-dim); transition:color .3s; }
+.phase-node .phase-desc  { font-size:10px; color:var(--text-dim); margin-left:auto; text-align:right; transition:color .3s; }
+.phase-node.active  { border-color:var(--amber); background:var(--amber-glow); box-shadow:0 0 12px var(--amber-glow); }
+.phase-node.active  .phase-label { color:var(--amber); }
+.phase-node.success { border-color:var(--green); background:var(--green-glow); }
+.phase-node.success .phase-label { color:var(--green); }
+.phase-node.failure { border-color:var(--red); background:var(--red-glow); box-shadow:0 0 10px var(--red-glow); }
+.phase-node.failure .phase-label { color:var(--red); }
+
+.side-paths { display:flex; gap:8px; margin-top:8px; padding-left:8px; border-left:2px solid var(--border); margin-left:14px; }
+.side-path-node {
+  flex:1; padding:6px 9px; border-radius:var(--radius); border:1px solid var(--border);
+  background:var(--bg-panel2); transition:all .3s;
+}
+.side-path-node .phase-label { font-family:var(--font-mono); font-size:11px; font-weight:600; letter-spacing:.04em; color:var(--text-dim); transition:color .3s; }
+.side-path-node .phase-icon  { font-size:12px; display:inline-block; margin-right:5px; }
+.side-path-node.active  { border-color:var(--red);   background:var(--red-glow);   }
+.side-path-node.active  .phase-label { color:var(--red); }
+.side-path-node.locked  { border-color:var(--amber); background:var(--amber-glow); }
+.side-path-node.locked  .phase-label { color:var(--amber); }
+.side-path-node.recover { border-color:var(--blue);  background:var(--blue-glow);  }
+.side-path-node.recover .phase-label { color:var(--blue); }
+
+.ecu-props { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
+.ecu-prop  { background:var(--bg-panel2); border:1px solid var(--border); border-radius:var(--radius); padding:6px 10px; }
+.ecu-prop .prop-key { font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); margin-bottom:2px; }
+.ecu-prop .prop-val { font-family:var(--font-mono); font-size:11px; font-weight:600; color:var(--text-hi); transition:color .3s; }
+.ecu-prop .prop-val.green  { color:var(--green); }
+.ecu-prop .prop-val.red    { color:var(--red); }
+.ecu-prop .prop-val.amber  { color:var(--amber); }
+.ecu-prop .prop-val.blue   { color:var(--blue); }
+
+/* attestation hash row */
+.att-row { margin-top:8px; background:var(--bg-panel2); border:1px solid var(--border); border-radius:var(--radius); padding:6px 10px; }
+.att-row .prop-key { font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); margin-bottom:2px; }
+.att-row .att-hash { font-family:var(--font-mono); font-size:10px; color:var(--blue); word-break:break-all; }
+
+/* ── Panel 2: Live Operations Console ── */
+.ws-status-bar {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 12px;
+  background:var(--bg-panel2); border:1px solid var(--border);
+  border-radius:var(--radius); margin-bottom:12px;
+}
+.ws-status-bar .ws-url { font-family:var(--font-mono); font-size:10px; color:var(--text-dim); flex:1; }
+
+.ops-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;
+}
+.ops-section-title {
+  font-size:9px; text-transform:uppercase; letter-spacing:.12em; color:var(--text-dim);
+  margin-bottom:5px; grid-column:1/-1; margin-top:4px;
+}
+
+.btn {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:7px 12px; border-radius:var(--radius); border:1px solid;
+  font-family:var(--font-mono); font-size:11px; font-weight:600;
+  cursor:pointer; transition:all .2s; white-space:nowrap;
+}
+.btn:disabled { opacity:.35; cursor:not-allowed; }
+.btn-primary {
+  background:var(--amber-glow); border-color:var(--amber); color:var(--amber);
+}
+.btn-primary:hover:not(:disabled) { background:rgba(240,160,48,.32); box-shadow:0 0 10px var(--amber-glow); }
+.btn-secondary {
+  background:var(--bg-panel2); border-color:var(--border-hi); color:var(--text);
+}
+.btn-secondary:hover:not(:disabled) { border-color:var(--text); color:var(--text-hi); }
+.btn-green  { background:var(--green-glow); border-color:var(--green); color:var(--green); }
+.btn-green:hover:not(:disabled) { background:rgba(40,192,96,.32); }
+.btn-red    { background:var(--red-glow); border-color:var(--red); color:var(--red); }
+.btn-red:hover:not(:disabled)   { background:rgba(224,64,72,.32); }
+.btn-blue   { background:var(--blue-glow); border-color:var(--blue); color:var(--blue); }
+.btn-blue:hover:not(:disabled)  { background:rgba(72,144,232,.28); }
+.btn-full { width:100%; justify-content:center; }
+
+/* API Terminal */
+.api-terminal {
+  flex:1; min-height:180px; max-height:220px;
+  background:#060c14; border:1px solid var(--border);
+  border-radius:var(--radius); overflow-y:auto; padding:10px 12px;
+  font-family:var(--font-mono); font-size:10px; line-height:1.7;
+}
+.api-terminal::-webkit-scrollbar { width:5px; }
+.api-terminal::-webkit-scrollbar-thumb { background:var(--border-hi); border-radius:3px; }
+.term-entry { margin-bottom:2px; }
+.term-req   { color:var(--text-dim); }
+.term-ok    { color:var(--green); }
+.term-err   { color:var(--red); }
+.term-ws    { color:var(--amber); }
+.term-json  { color:#7ab8e8; white-space:pre-wrap; word-break:break-all; margin-left:12px; font-size:9.5px; line-height:1.6; }
+
+/* ── Panel 3: VTC Runner ── */
+#panel-vtc .panel-body { padding:6px; }
+.vtc-toolbar { display:flex; gap:6px; padding:8px 8px 4px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.vtc-list    { display:flex; flex-direction:column; gap:3px; }
+.vtc-row {
+  display:flex; align-items:center; gap:8px; padding:5px 10px;
+  border-radius:var(--radius); border:1px solid transparent;
+  background:var(--bg-panel2); transition:all .2s;
+}
+.vtc-row:hover   { border-color:var(--border-hi); }
+.vtc-row.running { border-color:var(--amber); background:var(--amber-glow); }
+.vtc-row.pass    { border-color:var(--green); background:var(--green-glow); }
+.vtc-row.fail    { border-color:var(--red);   background:var(--red-glow); }
+.vtc-row.skip    { opacity:.55; }
+.vtc-id   { font-family:var(--font-mono); font-size:10px; font-weight:700; color:var(--amber); width:42px; flex-shrink:0; }
+.vtc-desc { font-size:11px; color:var(--text); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vtc-status { font-family:var(--font-mono); font-size:10px; font-weight:700; width:52px; text-align:right; flex-shrink:0; transition:color .3s; }
+.vtc-status.pass    { color:var(--green); }
+.vtc-status.fail    { color:var(--red); }
+.vtc-status.skip    { color:var(--text-dim); }
+.vtc-status.running { color:var(--amber); }
+.vtc-status.pending { color:var(--text-dim); }
+.vtc-run-btn {
+  padding:3px 8px; border-radius:3px; border:1px solid var(--border-hi);
+  background:transparent; color:var(--text-dim);
+  font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all .15s; flex-shrink:0;
+}
+.vtc-run-btn:hover    { border-color:var(--amber); color:var(--amber); }
+.vtc-run-btn:disabled { opacity:.3; cursor:not-allowed; }
+
+/* ── Panel 4: Event Log ── */
+#panel-log .panel-body { padding:0; }
+.event-log { font-family:var(--font-mono); font-size:11px; line-height:1.7; padding:10px 12px; display:flex; flex-direction:column; gap:1px; }
+.log-entry { display:flex; gap:8px; padding:2px 0; animation:logSlideIn .2s ease; }
+@keyframes logSlideIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+.log-ts  { color:var(--text-dim); flex-shrink:0; width:48px; font-size:10px; }
+.log-sev { flex-shrink:0; width:54px; font-weight:700; }
+.log-sev.INFO     { color:var(--blue); }
+.log-sev.WARNING  { color:var(--amber); }
+.log-sev.CRITICAL { color:var(--red); }
+.log-msg { color:var(--text); flex:1; }
+.log-msg.INFO     { color:#8ab8e8; }
+.log-msg.WARNING  { color:#e8c880; }
+.log-msg.CRITICAL { color:#e07880; font-weight:600; }
+.log-eid { color:var(--text-dim); font-size:9px; flex-shrink:0; max-width:160px; overflow:hidden; text-overflow:ellipsis; }
+.log-divider { height:1px; background:var(--border); margin:4px 0; }
+.log-header-bar {
+  display:flex; gap:6px; padding:6px 10px; align-items:center;
+  background:var(--bg-panel2); border-bottom:1px solid var(--border);
+  flex-shrink:0; font-size:10px;
+}
+
+/* WS reconnect overlay */
+.ws-overlay {
+  position:fixed; inset:0; background:rgba(8,13,22,.88);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+  z-index:100; transition:opacity .3s;
+}
+.ws-overlay.hidden { opacity:0; pointer-events:none; }
+.ws-overlay .overlay-title { font-family:var(--font-mono); font-size:22px; color:var(--red); font-weight:700; }
+.ws-overlay .overlay-sub   { font-size:13px; color:var(--text-dim); text-align:center; max-width:440px; }
+.ws-overlay .overlay-cmd   { font-family:var(--font-mono); font-size:12px; background:var(--bg-panel2); border:1px solid var(--border); padding:10px 18px; border-radius:var(--radius); color:var(--amber); }
+</style>
+</head>
+<body>
+
+<!-- WS disconnect overlay -->
+<div class="ws-overlay hidden" id="ws-overlay">
+  <div class="overlay-title">⚡ Backend Offline</div>
+  <div class="overlay-sub">The FastAPI backend is not reachable. Start the server then click Connect.</div>
+  <div class="overlay-cmd">uvicorn api.main:app --reload --port 8000</div>
+  <button class="btn btn-primary" style="margin-top:6px;" onclick="wsConnect()">▶ Connect Now</button>
+</div>
+
+<!-- Live Banner -->
+<div class="live-banner">
+  🟢 &nbsp;<strong>Live Monitor</strong> — requires
+  <code>uvicorn api.main:app --reload --port 8000</code> running on port 8000.
+  &nbsp;|&nbsp; Open <strong>index.html</strong> for the standalone PoC (no server needed).
+</div>
+
+<!-- Header -->
+<header class="app-header">
+  <div>
+    <div class="logo">◆ SecureBootLab</div>
+    <div class="subtitle">AUTOSAR Classic · Live Backend · ISO/SAE 21434 · UN R155</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="ws-status connecting" id="ws-status-chip" onclick="wsConnect()">
+    <span class="ws-dot"></span>
+    <span id="ws-status-text">Connecting…</span>
+  </div>
+  <div class="lifecycle-badge DEVELOPMENT" id="lifecycle-badge">DEVELOPMENT</div>
+</header>
+
+<!-- 4-panel grid -->
+<div class="main-grid">
+
+  <!-- Panel 1: ECU State Monitor (live) -->
+  <section class="panel" id="panel-ecu">
+    <div class="panel-header">
+      <span class="dot amber"></span>ECU State Monitor
+      <span style="flex:1"></span>
+      <span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0;">live ● ws</span>
+    </div>
+    <div class="panel-body">
+      <div class="state-flow" id="state-flow">
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-POWER_OFF">
+            <span class="phase-icon">⚫</span>
+            <span class="phase-label">POWER_OFF</span>
+            <span class="phase-desc">Idle</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-1"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-ROM_INIT">
+            <span class="phase-icon">🔌</span>
+            <span class="phase-label">ROM_INIT</span>
+            <span class="phase-desc">Boot ROM active</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-2"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-BOOTLOADER_VERIFY">
+            <span class="phase-icon">🔑</span>
+            <span class="phase-label">BOOTLOADER_VERIFY</span>
+            <span class="phase-desc">ECDSA sig check</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-3"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-APPLICATION_VERIFY">
+            <span class="phase-icon">🔒</span>
+            <span class="phase-label">APPLICATION_VERIFY</span>
+            <span class="phase-desc">Hash + sig + version</span>
+          </div>
+        </div>
+        <div class="phase-connector"><div class="line" id="line-4"></div></div>
+
+        <div class="phase-row">
+          <div class="phase-node" id="phase-NORMAL_OPERATION">
+            <span class="phase-icon">✅</span>
+            <span class="phase-label">NORMAL_OPERATION</span>
+            <span class="phase-desc">Chain of trust verified</span>
+          </div>
+        </div>
+
+        <div class="side-paths">
+          <div class="side-path-node" id="phase-SAFE_STATE">
+            <span class="phase-icon">🛑</span>
+            <span class="phase-label">SAFE_STATE</span>
+          </div>
+          <div class="side-path-node" id="phase-RECOVERY_MODE">
+            <span class="phase-icon">🔧</span>
+            <span class="phase-label">RECOVERY_MODE</span>
+          </div>
+          <div class="side-path-node" id="phase-LOCKED_OUT">
+            <span class="phase-icon">🔐</span>
+            <span class="phase-label">LOCKED_OUT</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ecu-props">
+        <div class="ecu-prop">
+          <div class="prop-key">Boot Attempts</div>
+          <div class="prop-val amber" id="prop-attempts">—</div>
+        </div>
+        <div class="ecu-prop">
+          <div class="prop-key">Lifecycle</div>
+          <div class="prop-val amber" id="prop-lifecycle">—</div>
+        </div>
+        <div class="ecu-prop">
+          <div class="prop-key">Secure Boot</div>
+          <div class="prop-val" id="prop-sb">—</div>
+        </div>
+        <div class="ecu-prop">
+          <div class="prop-key">Debug Interface</div>
+          <div class="prop-val" id="prop-dbg">—</div>
+        </div>
+      </div>
+
+      <div class="att-row" id="att-row" style="display:none;">
+        <div class="prop-key">Attestation Hash (last measured component)</div>
+        <div class="att-hash" id="att-hash">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Panel 2: Live Operations Console -->
+  <section class="panel" id="panel-console">
+    <div class="panel-header">
+      <span class="dot blue"></span>Live Operations Console
+    </div>
+    <div class="panel-body" style="display:flex;flex-direction:column;gap:10px;">
+
+      <!-- WS status bar -->
+      <div class="ws-status-bar">
+        <div class="ws-dot" id="console-ws-dot" style="width:7px;height:7px;border-radius:50%;background:var(--amber);animation:pulse 1s infinite;"></div>
+        <span class="ws-url" id="console-ws-url">ws://localhost:8000/ws/events</span>
+        <span id="console-ws-state" style="font-family:var(--font-mono);font-size:10px;color:var(--amber);">Connecting…</span>
+      </div>
+
+      <!-- Operations grid -->
+      <div class="ops-grid">
+        <div class="ops-section-title">Boot &amp; ECU</div>
+        <button class="btn btn-primary btn-full" onclick="opProvision()">📦 Provision App Image</button>
+        <button class="btn btn-green  btn-full" onclick="opBoot()">▶ Start Boot Sequence</button>
+        <button class="btn btn-secondary btn-full" onclick="opReset()">↺ Reset ECU</button>
+        <button class="btn btn-blue btn-full" onclick="opRefreshState()">⟳ Refresh State</button>
+
+        <div class="ops-section-title">Firmware Operations</div>
+        <button class="btn btn-secondary btn-full" onclick="opActivateUpdate()">⬆ Activate Test Update</button>
+        <button class="btn btn-secondary btn-full" onclick="opRollbackUpdate()">⏮ Rollback Update</button>
+        <button class="btn btn-secondary btn-full" onclick="opEnterRecovery()">🛠 Enter Recovery</button>
+        <button class="btn btn-secondary btn-full" onclick="opFlashRecovery()">💾 Flash Test Image</button>
+
+        <div class="ops-section-title">Diagnostics &amp; Auth</div>
+        <button class="btn btn-secondary btn-full" onclick="opIntegrity()">🔍 Log Integrity</button>
+        <button class="btn btn-secondary btn-full" onclick="opLoadEvents()">📋 Load Events (50)</button>
+        <button class="btn btn-secondary btn-full" onclick="opAuditLog()">📜 Audit Log</button>
+        <button class="btn btn-secondary btn-full" onclick="opListKeys()">🔑 List Trust Anchors</button>
+      </div>
+
+      <!-- API Response Terminal -->
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-dim);display:flex;align-items:center;gap:8px;">
+        API Terminal
+        <span style="flex:1;border-top:1px solid var(--border);display:inline-block;height:1px;"></span>
+        <span style="cursor:pointer;" onclick="document.getElementById('api-terminal').innerHTML=''">⊘ Clear</span>
+      </div>
+      <div class="api-terminal" id="api-terminal">
+        <div class="term-entry"><span class="term-ws">// SecureBootLab Live Monitor ready — awaiting WebSocket connection</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Panel 3: VTC Scenario Runner -->
+  <section class="panel" id="panel-vtc">
+    <div class="panel-header">
+      <span class="dot green"></span>Test Scenario Runner
+      <span style="flex:1"></span>
+      <span id="vtc-summary" style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0;">—</span>
+    </div>
+    <div class="vtc-toolbar">
+      <button class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="runAllVTCs()">▶ Run All</button>
+      <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="clearVTCStatus()">↺ Clear</button>
+    </div>
+    <div class="panel-body" style="padding:6px;">
+      <div class="vtc-list" id="vtc-list">
+        <div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px;">Connecting to backend…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Panel 4: Live Event Log -->
+  <section class="panel" id="panel-log">
+    <div class="panel-header">
+      <span class="dot red"></span>Security Event Log
+      <span style="flex:1"></span>
+      <span style="font-size:9px;color:var(--text-dim);text-transform:none;letter-spacing:0;">live ● ws</span>
+    </div>
+    <div class="log-header-bar">
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);">Events: <span id="log-count">0</span></span>
+      <span style="flex:1;"></span>
+      <button class="btn btn-secondary" style="padding:2px 8px;font-size:10px;" onclick="loadHistoricalEvents()">📋 Load History</button>
+      <button class="btn btn-secondary" style="padding:2px 8px;font-size:10px;" onclick="clearLog()">⊘ Clear</button>
+    </div>
+    <div class="panel-body" style="padding:0;">
+      <div class="event-log" id="event-log"></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+'use strict';
+
+// ============================================================
+// Config
+// ============================================================
+const API_BASE = 'http://localhost:8000';
+const WS_URL   = 'ws://localhost:8000/ws/events';
+
+// ============================================================
+// WebSocket Management
+// ============================================================
+let ws                = null;
+let wsReconnectTimer  = null;
+let wsReconnectDelay  = 2000;
+let wsConnected       = false;
+
+function wsConnect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+
+  wsSetStatus('connecting', 'Connecting…');
+  try {
+    ws = new WebSocket(WS_URL);
+    ws.onopen    = wsOnOpen;
+    ws.onmessage = wsOnMessage;
+    ws.onclose   = wsOnClose;
+    ws.onerror   = () => {};
+  } catch(e) {
+    wsOnClose();
+  }
+}
+
+function wsOnOpen() {
+  wsConnected = true;
+  wsReconnectDelay = 2000;
+  wsSetStatus('connected', 'Connected');
+  document.getElementById('ws-overlay').classList.add('hidden');
+  termLog('ws', '// WebSocket connected — ' + WS_URL);
+}
+
+function wsOnClose() {
+  wsConnected = false;
+  wsSetStatus('disconnected', 'Disconnected — click to retry');
+  document.getElementById('ws-overlay').classList.remove('hidden');
+  wsReconnectTimer = setTimeout(() => { wsConnect(); }, wsReconnectDelay);
+  wsReconnectDelay = Math.min(wsReconnectDelay * 1.5, 15000);
+}
+
+function wsOnMessage(event) {
+  let msg;
+  try { msg = JSON.parse(event.data); } catch(e) { return; }
+
+  switch (msg.type) {
+    case 'dem_event':
+      addDemEvent(msg);
+      break;
+    case 'ecu_state':
+      renderEcuState(msg);
+      break;
+    case 'boot_result':
+      termLog('ws', `// WS boot_result: success=${msg.success} phase=${msg.phase_reached}`, msg.success);
+      if (msg.success) animateBootPhases();
+      break;
+    case 'vtc_result':
+      setVtcStatus(msg.vtc_id, msg.status, msg.detail);
+      updateVtcSummary();
+      termLog('ws', `// WS vtc_result: ${msg.vtc_id} → ${msg.status}`, msg.status === 'PASS');
+      break;
+    case 'debug_access':
+      termLog('ws', `// WS debug_access: granted=${msg.granted}`, msg.granted);
+      break;
+    case 'key_rotation':
+      termLog('ws', `// WS key_rotation: ${msg.new_key_id} success=${msg.success}`, msg.success);
+      break;
+    case 'provisioned':
+      termLog('ws', `// WS ${msg.note}`, true);
+      break;
+    default:
+      termLog('ws', `// WS ${msg.type}`);
+  }
+}
+
+function wsSetStatus(state, text) {
+  const chip = document.getElementById('ws-status-chip');
+  const txt  = document.getElementById('ws-status-text');
+  const dot  = document.getElementById('console-ws-dot');
+  const st   = document.getElementById('console-ws-state');
+
+  chip.className = 'ws-status ' + state;
+  txt.textContent = text;
+
+  const colour = state === 'connected' ? 'var(--green)' : state === 'disconnected' ? 'var(--red)' : 'var(--amber)';
+  dot.style.background = colour;
+  dot.style.animation = state === 'connecting' ? 'pulse 1s infinite' : 'none';
+  st.style.color = colour;
+  st.textContent = text;
+}
+
+// ============================================================
+// API Client
+// ============================================================
+async function apiCall(method, path, body) {
+  const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  termLog('req', `${ts}  ${method} ${path}`);
+  try {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body) opts.body = JSON.stringify(body);
+    const resp = await fetch(API_BASE + path, opts);
+    const data = await resp.json();
+    const ok = resp.ok;
+    termLog('resp', JSON.stringify(data, null, 2), ok);
+    return { ok, data };
+  } catch(e) {
+    termLog('err', `Error: ${e.message}`, false);
+    return { ok: false, data: null };
+  }
+}
+
+// ============================================================
+// API Terminal
+// ============================================================
+function termLog(type, text, ok) {
+  const term = document.getElementById('api-terminal');
+  const entry = document.createElement('div');
+  entry.className = 'term-entry';
+  if (type === 'req') {
+    entry.innerHTML = `<span class="term-req">${escHtml(text)}</span>`;
+  } else if (type === 'resp') {
+    const cls = ok === false ? 'term-err' : ok === true ? 'term-ok' : 'term-ws';
+    const arrow = ok === false ? '✗' : ok === true ? '✓' : '●';
+    entry.innerHTML = `<div class="term-json ${cls}">${arrow} ${escHtml(text)}</div>`;
+  } else if (type === 'ws') {
+    entry.innerHTML = `<span class="term-ws">${escHtml(text)}</span>`;
+  } else {
+    entry.innerHTML = `<span class="term-err">${escHtml(text)}</span>`;
+  }
+  term.appendChild(entry);
+  term.scrollTop = term.scrollHeight;
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================
+// ECU State Renderer
+// ============================================================
+const MAIN_PHASES = ['POWER_OFF','ROM_INIT','BOOTLOADER_VERIFY','APPLICATION_VERIFY','NORMAL_OPERATION'];
+const SIDE_PHASES = ['SAFE_STATE','RECOVERY_MODE','LOCKED_OUT'];
+
+function renderEcuState(s) {
+  const phase = s.boot_phase || s.bootPhase || 'POWER_OFF';
+  const isSuccess = phase === 'NORMAL_OPERATION';
+  const isFailure = ['SAFE_STATE','LOCKED_OUT'].includes(phase);
+
+  MAIN_PHASES.forEach(p => {
+    const el = document.getElementById('phase-' + p);
+    if (!el) return;
+    el.className = 'phase-node';
+    if (p === phase) {
+      el.classList.add(isSuccess ? 'success' : isFailure ? 'failure' : 'active');
+    }
+  });
+  SIDE_PHASES.forEach(p => {
+    const el = document.getElementById('phase-' + p);
+    if (!el) return;
+    el.className = 'side-path-node';
+    if (p === phase) {
+      if (p === 'LOCKED_OUT') el.classList.add('locked');
+      else if (p === 'RECOVERY_MODE') el.classList.add('recover');
+      else el.classList.add('active');
+    }
+  });
+
+  const idx = MAIN_PHASES.indexOf(phase);
+  for (let i = 1; i <= 4; i++) {
+    const line = document.getElementById('line-' + i);
+    if (line) line.className = 'line' + (i <= idx ? ' active' : '');
+  }
+
+  // Prop tiles
+  setprop('prop-attempts', String(s.boot_attempt_count ?? '—'), 'amber');
+  setLCProp(s.lifecycle);
+  setSBProp(s.secure_boot_enabled);
+  setDbgProp(s.debug_locked);
+
+  // Lifecycle badge in header
+  const lc = s.lifecycle || 'DEVELOPMENT';
+  const badge = document.getElementById('lifecycle-badge');
+  badge.textContent = lc;
+  badge.className = 'lifecycle-badge ' + lc;
+}
+
+function setLCProp(lc) {
+  const el = document.getElementById('prop-lifecycle');
+  if (!el) return;
+  el.textContent = lc || '—';
+  el.className = 'prop-val ' + (lc === 'PRODUCTION' ? 'red' : lc === 'EOL' ? 'amber' : 'amber');
+}
+function setSBProp(val) {
+  const el = document.getElementById('prop-sb');
+  if (!el) return;
+  el.textContent = val === undefined ? '—' : val ? 'ENABLED' : 'DISABLED';
+  el.className = 'prop-val ' + (val ? 'green' : 'red');
+}
+function setDbgProp(val) {
+  const el = document.getElementById('prop-dbg');
+  if (!el) return;
+  el.textContent = val === undefined ? '—' : val ? 'LOCKED' : 'OPEN';
+  el.className = 'prop-val ' + (val ? 'red' : 'green');
+}
+function setprop(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  if (cls) el.className = 'prop-val ' + cls;
+}
+
+async function animateBootPhases() {
+  const phases = ['ROM_INIT','BOOTLOADER_VERIFY','APPLICATION_VERIFY','NORMAL_OPERATION'];
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  for (let i = 0; i < phases.length; i++) {
+    MAIN_PHASES.forEach(p => {
+      const el = document.getElementById('phase-' + p);
+      if (el) el.className = 'phase-node' + (p === phases[i] ? (i < phases.length-1 ? ' active' : ' success') : '');
+    });
+    for (let j = 1; j <= 4; j++) {
+      const line = document.getElementById('line-' + j);
+      if (line) line.className = 'line' + (j <= i + 1 ? ' active' : '');
+    }
+    await sleep(300);
+  }
+}
+
+// ============================================================
+// Event Log
+// ============================================================
+let logCount = 0;
+
+function addDemEvent(evt) {
+  const log = document.getElementById('event-log');
+  const sev = evt.severity || 'INFO';
+  const ts  = evt.timestamp ? (evt.timestamp % 10000).toFixed(2) + 's' : '—';
+  const msg = evt.description || evt.msg || '';
+  const eid = evt.event_id || '';
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML =
+    `<span class="log-ts">${escHtml(ts)}</span>` +
+    `<span class="log-sev ${sev}">${sev}</span>` +
+    `<span class="log-msg ${sev}">${escHtml(msg)}</span>` +
+    `<span class="log-eid">${escHtml(eid)}</span>`;
+  log.appendChild(entry);
+
+  if (sev === 'CRITICAL') {
+    const div = document.createElement('div'); div.className = 'log-divider'; log.appendChild(div);
+  }
+  log.scrollTop = log.scrollHeight;
+  logCount++;
+  document.getElementById('log-count').textContent = logCount;
+}
+
+function addLogEntry(sev, msg, eid) {
+  addDemEvent({ severity: sev, timestamp: performance.now() / 1000, description: msg, event_id: eid });
+}
+
+function clearLog() {
+  document.getElementById('event-log').innerHTML = '';
+  logCount = 0;
+  document.getElementById('log-count').textContent = '0';
+}
+
+async function loadHistoricalEvents() {
+  const r = await apiCall('GET', '/diagnostics/events?limit=50');
+  if (r.ok && r.data.events) {
+    clearLog();
+    r.data.events.forEach(e => addDemEvent(e));
+    addLogEntry('INFO', `Loaded ${r.data.count} events from backend history`, 'HISTORY_LOADED');
+  }
+}
+
+// ============================================================
+// VTC Runner
+// ============================================================
+let vtcList = [];
+let vtcRunning = false;
+
+async function loadVtcList() {
+  const r = await apiCall('GET', '/test/list');
+  if (!r.ok || !r.data) return;
+  vtcList = r.data.vtcs;
+  renderVtcList(vtcList);
+}
+
+function renderVtcList(items) {
+  const el = document.getElementById('vtc-list');
+  el.innerHTML = '';
+  items.forEach(vtc => {
+    const row = document.createElement('div');
+    const isSkip = vtc.vtc_id === 'VT-18' || vtc.vtc_id === 'VT-19';
+    row.className = 'vtc-row' + (isSkip ? ' skip' : '');
+    row.id = 'vtc-row-' + vtc.vtc_id;
+    row.innerHTML =
+      `<span class="vtc-id">${vtc.vtc_id}</span>` +
+      `<span class="vtc-desc">${escHtml(vtc.description)}</span>` +
+      `<span class="vtc-status pending" id="vtc-status-${vtc.vtc_id}">—</span>` +
+      `<button class="vtc-run-btn" id="vtc-btn-${vtc.vtc_id}" onclick="runVtc('${vtc.vtc_id}')"${isSkip?' disabled':''}>▶</button>`;
+    el.appendChild(row);
+  });
+  updateVtcSummary();
+}
+
+function setVtcStatus(id, status, detail) {
+  const row    = document.getElementById('vtc-row-' + id);
+  const statusEl = document.getElementById('vtc-status-' + id);
+  if (!row || !statusEl) return;
+  const cls    = status.toLowerCase();
+  row.className = 'vtc-row ' + cls;
+  statusEl.className = 'vtc-status ' + cls;
+  statusEl.textContent = status;
+  statusEl.title = typeof detail === 'object' ? JSON.stringify(detail) : String(detail || '');
+}
+
+function clearVTCStatus() {
+  vtcList.forEach(vtc => {
+    const row = document.getElementById('vtc-row-' + vtc.vtc_id);
+    const statusEl = document.getElementById('vtc-status-' + vtc.vtc_id);
+    const isSkip = vtc.vtc_id === 'VT-18' || vtc.vtc_id === 'VT-19';
+    if (row) row.className = 'vtc-row' + (isSkip ? ' skip' : '');
+    if (statusEl) { statusEl.className = 'vtc-status pending'; statusEl.textContent = '—'; }
+  });
+  vtcRunning = false;
+  updateVtcSummary();
+}
+
+function updateVtcSummary() {
+  let pass = 0, fail = 0, skip = 0, pend = 0;
+  vtcList.forEach(vtc => {
+    const el = document.getElementById('vtc-status-' + vtc.vtc_id);
+    if (!el) return;
+    const t = el.textContent;
+    if (t === 'PASS') pass++;
+    else if (t === 'FAIL') fail++;
+    else if (t === 'SKIP') skip++;
+    else pend++;
+  });
+  const total = vtcList.length;
+  document.getElementById('vtc-summary').textContent =
+    `${pass}✓ ${fail ? fail+'✗ ' : ''}${skip ? skip+'⊘ ' : ''}/ ${total}`;
+}
+
+async function runVtc(id) {
+  if (vtcRunning) return;
+  setVtcStatus(id, 'RUNNING', '');
+  const r = await apiCall('POST', `/test/${id}/run`);
+  if (r.ok && r.data) {
+    setVtcStatus(id, r.data.status, r.data.detail);
+    updateVtcSummary();
+  } else {
+    setVtcStatus(id, 'FAIL', 'network error');
+  }
+}
+
+async function runAllVTCs() {
+  if (vtcRunning) return;
+  vtcRunning = true;
+  clearVTCStatus();
+  const runnable = vtcList.filter(v => v.vtc_id !== 'VT-18' && v.vtc_id !== 'VT-19');
+  for (const vtc of runnable) {
+    setVtcStatus(vtc.vtc_id, 'RUNNING', '');
+    const r = await apiCall('POST', `/test/${vtc.vtc_id}/run`);
+    if (r.ok && r.data) setVtcStatus(vtc.vtc_id, r.data.status, r.data.detail);
+    else setVtcStatus(vtc.vtc_id, 'FAIL', 'network error');
+    updateVtcSummary();
+  }
+  // Mark hardware-skip VTCs
+  ['VT-18','VT-19'].forEach(id => setVtcStatus(id, 'SKIP', 'hardware/timer-only'));
+  updateVtcSummary();
+  vtcRunning = false;
+}
+
+// ============================================================
+// Operations
+// ============================================================
+async function opRefreshState() {
+  const r = await apiCall('GET', '/ecu/state');
+  if (r.ok) renderEcuState(r.data);
+}
+
+async function opBoot() {
+  const r = await apiCall('POST', '/boot/start');
+  if (r.ok) {
+    addLogEntry('INFO', `Boot: success=${r.data.success} phase=${r.data.phase_reached}`, 'BOOT_RESULT');
+    opRefreshState();
+  }
+}
+
+async function opReset() {
+  const r = await apiCall('POST', '/ecu/reset');
+  if (r.ok && r.data.ecu_state) renderEcuState(r.data.ecu_state);
+}
+
+async function opProvision() {
+  const r = await apiCall('POST', '/dev/provision-app-image');
+  if (r.ok) addLogEntry('INFO', 'Application image provisioned in NvM (v2) — ready to boot via SecureBootManager', 'PROVISION_OK');
+}
+
+async function opActivateUpdate() {
+  // Get a fresh OEM-signed test image from the backend HSM
+  const imgR = await apiCall('GET', '/dev/test-image');
+  if (!imgR.ok) return;
+  const { image, signature, version } = imgR.data;
+  await apiCall('POST', '/update/activate', { package: image, signature, version });
+  opRefreshState();
+}
+
+async function opRollbackUpdate() {
+  await apiCall('POST', '/update/rollback');
+  opRefreshState();
+}
+
+async function opEnterRecovery() {
+  const r = await apiCall('POST', '/recovery/enter', { reason: 'dashboard_demo' });
+  if (r.ok && r.data.ecu_state) renderEcuState(r.data.ecu_state);
+}
+
+async function opFlashRecovery() {
+  const imgR = await apiCall('GET', '/dev/test-image');
+  if (!imgR.ok) return;
+  const { image, signature } = imgR.data;
+  await apiCall('POST', '/recovery/flash', { image, signature });
+  opRefreshState();
+}
+
+async function opIntegrity() {
+  const r = await apiCall('GET', '/diagnostics/integrity');
+  if (r.ok) {
+    addLogEntry(r.data.integrity_ok ? 'INFO' : 'CRITICAL',
+      `Audit log integrity: ${r.data.integrity_ok ? 'OK ✓' : 'FAILED ✗'}`,
+      'INTEGRITY_CHECK');
+  }
+}
+
+async function opLoadEvents() {
+  loadHistoricalEvents();
+}
+
+async function opAuditLog() {
+  const r = await apiCall('GET', '/diagnostics/audit-log?last_n=30');
+  if (r.ok && r.data.entries) {
+    addLogEntry('INFO', `Audit log: ${r.data.count} chain-linked entries returned`, 'AUDIT_LOG_LOADED');
+  }
+}
+
+async function opListKeys() {
+  const r = await apiCall('GET', '/auth/keys');
+  if (r.ok && r.data.key_ids) {
+    addLogEntry('INFO', `Trust anchors: ${r.data.key_ids.join(', ')}`, 'KEY_LIST');
+  }
+}
+
+// ============================================================
+// Initialization
+// ============================================================
+async function init() {
+  // Try to load state immediately (may fail if backend not ready)
+  const r = await apiCall('GET', '/ecu/state').catch(() => ({ ok: false }));
+  if (r.ok) renderEcuState(r.data);
+
+  // Load VTC list
+  await loadVtcList();
+
+  // Start WebSocket (triggers reconnect loop on failure)
+  wsConnect();
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
